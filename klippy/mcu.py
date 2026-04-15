@@ -877,10 +877,14 @@ class MCU:
         if self.is_non_critical and not self._check_serial_exists():
             self._get_status_info['is_connected'] = False
             self.non_critical_disconnected = True
+            if self.is_non_critical:
+                self._get_status_info["non_critical_disconnected"] = True
             return False
         else:
             self._get_status_info['is_connected'] = True
             self.non_critical_disconnected = False
+            if self.is_non_critical:
+                self._get_status_info["non_critical_disconnected"] = False
         if self.is_fileoutput():
             self._connect_file()
         else:
