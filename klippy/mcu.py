@@ -617,6 +617,7 @@ class MCU:
         self.is_non_critical = config.getboolean("is_non_critical", False)
         if self.is_non_critical and self.get_name() == "mcu":
             raise error("Primary MCU cannot be marked as non-critical!")
+        self.no_reconnect = config.getboolean("no_reconnect", False)
         if self.is_non_critical:
             self.non_critical_recon_timer = self._reactor.register_timer(
                 self.non_critical_recon_event
@@ -722,8 +723,7 @@ class MCU:
         self.gcode.respond_info(f"mcu: '{self._name}' disconnected!", log=True)
 
     def non_critical_recon_event(self, eventtime):
-        # for beacon, carto (scanner) or eddy we want to bail out of trying to reconnect
-        if self._name == 'beacon' or self._name == 'scanner' or self._name == 'cartographer' or self._name == 'eddy':
+        if self.no_reconnect:
             return self._reactor.NEVER
 
         success = self.recon_mcu()
