@@ -622,8 +622,6 @@ class MCU:
             self.non_critical_recon_timer = self._reactor.register_timer(
                 self.non_critical_recon_event
             )
-            if canbus_uuid:
-                raise error("CAN MCUs can't be non-critical yet!")
         self.non_critical_disconnected = False
         # until we actually do the connect its not connected
         self._get_status_info['is_connected'] = False
@@ -870,6 +868,11 @@ class MCU:
         self._printer.set_rollover_info(self._name, log_info, log=False)
 
     def _check_serial_exists(self):
+        if self._canbus_iface is not None:
+            cbid = self._printer.lookup_object('canbus_ids')
+            nodeid = cbid.get_nodeid(self._serialport)
+            return self._serial.check_canbus_connect(
+                self._serialport, nodeid, self._canbus_iface)
         rts = self._restart_method != "cheetah"
         return self._serial.check_connect(self._serialport, self._baud, rts)
 
@@ -907,6 +910,13 @@ class MCU:
                     self._serial.connect_pipe(self._serialport)
                 self._clocksync.connect(self._serial)
             except serialhdl.error as e:
+                if self.is_non_critical:
+                    logging.warning("mcu '%s': CAN connect failed: %s",
+                                    self._name, str(e))
+                    self._get_status_info['is_connected'] = False
+                    self.non_critical_disconnected = True
+                    self._get_status_info["non_critical_disconnected"] = True
+                    return False
                 raise error(str(e))
         logging.info(self._log_info())
         ppins = self._printer.lookup_object('pins')

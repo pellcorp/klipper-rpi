@@ -211,6 +211,67 @@ class SerialReader:
         serial_dev.close()
         return True
 
+    def check_canbus_connect(self, canbus_uuid, canbus_nodeid, canbus_iface):
+        # Quick probe: check if CAN device is on the bus (1s timeout).
+        # Sends QUERY_UNASSIGNED and SET_NODEID, listens for admin response.
+        import can, time
+        try:
+            uuid = int(canbus_uuid, 16)
+        except ValueError:
+            return False
+        if uuid < 0 or uuid > 0xffffffffffff:
+            return False
+        uuid_bytes = [(uuid >> (40 - i*8)) & 0xff for i in range(6)]
+        CANBUS_ID_ADMIN = 0x3f0
+        CANBUS_ID_ADMIN_RESP = 0x3f1
+        CMD_QUERY_UNASSIGNED = 0x00
+        CMD_SET_NODEID = 0x01
+        RESP_NEED_NODEID = 0x20
+        RESP_HAVE_NODEID = 0x21
+        try:
+            filters = [{"can_id": CANBUS_ID_ADMIN_RESP,
+                        "can_mask": 0x7ff, "extended": False}]
+            bus = can.interface.Bus(channel=canbus_iface,
+                                    can_filters=filters,
+                                    bustype="socketcan")
+        except Exception as e:
+            logging.warning("check_canbus_connect: failed to open %s: %s",
+                            canbus_iface, e)
+            return False
+        try:
+            query_msg = can.Message(arbitration_id=CANBUS_ID_ADMIN,
+                                    data=[CMD_QUERY_UNASSIGNED],
+                                    is_extended_id=False)
+            set_id_cmd = [CMD_SET_NODEID] + uuid_bytes + [canbus_nodeid]
+            set_id_msg = can.Message(arbitration_id=CANBUS_ID_ADMIN,
+                                     data=set_id_cmd, is_extended_id=False)
+            for _ in range(3):
+                bus.send(query_msg)
+                bus.send(set_id_msg)
+            end_time = time.monotonic() + 1.0
+            while True:
+                remaining = end_time - time.monotonic()
+                if remaining <= 0:
+                    break
+                msg = bus.recv(timeout=remaining)
+                if msg is None:
+                    break
+                if msg.arbitration_id != CANBUS_ID_ADMIN_RESP:
+                    continue
+                if len(msg.data) < 7:
+                    continue
+                if msg.data[0] not in (RESP_NEED_NODEID, RESP_HAVE_NODEID):
+                    continue
+                if list(msg.data[1:7]) == uuid_bytes:
+                    return True
+        except Exception as e:
+            logging.warning("check_canbus_connect: error probing %s: %s",
+                            canbus_uuid, e)
+        finally:
+            bus.shutdown()
+        return False
+
+
     def connect_file(self, debugoutput, dictionary, pace=False):
         self.serial_dev = debugoutput
         self.msgparser.process_identify(dictionary, decompress=False)

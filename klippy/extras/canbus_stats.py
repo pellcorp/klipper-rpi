@@ -30,6 +30,9 @@ class PrinterCANBusStats:
         if mcu_name != 'mcu':
             mcu_name = 'mcu ' + mcu_name
         self.mcu = self.printer.lookup_object(mcu_name)
+        # Skip if MCU is non-critical and currently disconnected
+        if getattr(self.mcu, 'non_critical_disconnected', False):
+            return
         # Lookup status query command
         if self.mcu.try_lookup_command("get_canbus_status") is None:
             return
