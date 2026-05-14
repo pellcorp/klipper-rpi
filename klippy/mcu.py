@@ -869,10 +869,10 @@ class MCU:
 
     def _check_serial_exists(self):
         if self._canbus_iface is not None:
-            cbid = self._printer.lookup_object('canbus_ids')
-            nodeid = cbid.get_nodeid(self._serialport)
-            return self._serial.check_canbus_connect(
-                self._serialport, nodeid, self._canbus_iface)
+            # CAN MCUs keep their assigned node ID across Klipper restarts
+            # (e.g. SAVE_CONFIG), so admin-channel probing gives false negatives.
+            # Let connect_canbus() determine presence instead.
+            return True
         rts = self._restart_method != "cheetah"
         return self._serial.check_connect(self._serialport, self._baud, rts)
 
